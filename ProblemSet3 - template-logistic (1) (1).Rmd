@@ -1,0 +1,333 @@
+---
+
+---
+
+```{r,include=FALSE}
+library(tidyverse)
+library(haven)
+
+# Read in the raw data 
+raw_data_t <- read_dta("ns20200625/ns20200625.dta")
+# Add the labels
+raw_data_t <- labelled::to_factor(raw_data_t)
+# Just keep some variables
+reduced_data_t <- 
+  raw_data_t %>% 
+  select(registration,
+         vote_2020,
+         language,
+         employment,
+         gender,
+         census_region,
+         hispanic,
+         race_ethnicity,
+         household_income,
+         education,
+         state,
+         age)
+
+#Cleaning the data for post-stratification later
+
+reduced_data_t <-
+  reduced_data_t %>%
+  mutate(vote_trump = 
+           ifelse(vote_2020 =="Donald Trump", 1, 0)) %>% 
+  mutate(vote_biden =
+           ifelse(vote_2020 =="Joe Biden", 1, 0))%>%
+  mutate(Registration = 
+           ifelse(registration == "Registered", 1, 0)) %>%
+  mutate(age_group = case_when(age <= 30 ~ '18to30',
+                              age > 30 & age <= 40 ~ "31to40",
+                              age > 40 & age <= 50 ~ "41to50",
+                              age > 50 & age <= 60 ~ "51to60",
+                              age > 60 ~ "60plus")) %>%
+  select(-vote_2020,-registration, -age) 
+  
+reduced_data_t <-
+  reduced_data_t %>%
+  mutate(Race = case_when(race_ethnicity == "White" ~ "White", race_ethnicity == "Black, or African American" ~ "Black, or African American", race_ethnicity == "American Indian or Alaska Native" ~ "American Indian or Alaska Native", race_ethnicity == "Asian (Chinese)" ~ "Asian (Chinese)", race_ethnicity == "Asian (Japanese)" ~ "Asian (Japanese)", race_ethnicity == "Asian (Asian Indian)" | race_ethnicity =="Asian (Filipino)" | race_ethnicity =="Asian (Korean)" | race_ethnicity =="Asian (Vietnamese)" | race_ethnicity =="Asian (Other)" | race_ethnicity =="Pacific Islander (Native Hawaiian)" | race_ethnicity =="Pacific Islander (Guamanian)" | race_ethnicity =="Pacific Islander (Samoan)" | race_ethnicity =="Pacific Islander (Other)"  ~ "Other Asian or Pacific Islander", race_ethnicity == "Some other race" ~ "Some other race")) %>%
+  select(-race_ethnicity)
+
+reduced_data_t <-
+  reduced_data_t %>%
+  mutate(Hispanic = case_when(hispanic == "Not Hispanic" ~ "not hispanic", hispanic == "Mexican" ~ "mexican", hispanic == "Cuban" ~ "cuban", hispanic == "Puerto Rican" ~ "puerto rican", hispanic == "Argentinian" | hispanic =="Colombian" | hispanic =="Ecuadorian" | hispanic =="Salvadorean" | hispanic =="Guatemalan" | hispanic =="Nicaraguan" | hispanic =="Panamanian" | hispanic =="Peruvian" | hispanic =="Spanish" | hispanic =="Venezuelan" | hispanic =="Other Hispanic" ~ "other")) %>%
+  select(-hispanic)
+
+reduced_data_t <-
+  reduced_data_t %>%
+  mutate(Employment = case_when(employment == "Full-time employed" | employment =="Part-time employed" | employment =="Self_employed" ~ "employed", employment == "Homemaker" | employment =="Retired" | employment =="Permanently disabled" | employment =="Student" | employment =="Other" ~ "not in labor force", employment == "Unemployed or temporarily on layoff" ~ "unemployed")) %>%
+  select(-employment)
+
+reduced_data_t <-
+  reduced_data_t %>%
+  mutate(Education = case_when(education == "3rd Grade or less" | education == "Middle School - Grades 4 - 8" ~ "Middle School or less", education == "Completed some high school" ~ "Completed some high school", education == "High school graduate" ~ "High school graduate", education == "Other post high school vocational training" | education == "Completed some college, but no degree" | education == "Completed some graduate, but no degree" ~ "Some College", education == "Associate Degree" ~ "Associate Degree", education == "College Degree (such as B.A., B.S.)" ~ "College Degree (such as B.A., B.S.)", education == "Masters degree" | education == "Doctorate degree" ~ "Beyond College" )) %>%
+  select(-education)
+    
+reduced_data_t <- reduced_data_t %>%
+  mutate(sex = case_when(gender == "Female" ~ "female", gender == "Male" ~ "male")) %>%
+  select(-gender)
+
+reduced_data_t <- reduced_data_t[!(reduced_data_t$Registration == 0),]
+reduced_data_t <- reduced_data_t %>% select(-Registration)
+  
+reduced_data_t <- reduced_data_t %>%
+  na.omit()  
+
+# Saving the survey/sample data as a csv file in my
+# working directory
+write_csv(reduced_data_t, "survey_data.csv")
+```
+
+```{r,include=FALSE}
+raw_data_p <- read_dta("usa_00002.dta.gz")
+
+
+# Add the labels
+raw_data_p <- labelled::to_factor(raw_data_p)
+```
+
+```{r,include=FALSE}
+reduced_data_p <- 
+  raw_data_p %>% 
+  select(region,
+         age, 
+         race, 
+         educ,
+         sex,
+         hispan,
+         empstat)
+      
+
+#Modify the census data into the same scale and format as the survey data
+
+reduced_data_p$age <- as.integer(reduced_data_p$age)
+reduced_data_p <- reduced_data_p[!(reduced_data_p$age < 18),] 
+
+reduced_data_p <- reduced_data_p %>%
+  mutate(age_group = case_when(age <= 30 ~ '18to30',
+                              age > 30 & age <= 40 ~ "31to40",
+                              age > 40 & age <= 50 ~ "41to50",
+                              age > 50 & age <= 60 ~ "51to60",
+                              age > 60 ~ "60plus"))
+
+reduced_data_p <- reduced_data_p %>%
+  mutate(census_region = case_when(region == "new england division" | region == "middle atlantic division" ~ 'Northeast',
+                              region == "west north central div" | region == "east north central div" ~ "Midwest",
+                              region == "pacific division" | region == "mountain division" ~ "West",
+                              region ==  "west south central div" | region == "east south central div" | region == "south atlantic division" ~ "South"))
+
+
+reduced_data_p <- reduced_data_p %>%
+  mutate(Race = case_when(race == "white" ~ "White", race == "black/african american/negro" ~ "Black, or African American", race == "american indian or alaska native" ~ "American Indian or Alaska Native", race == "chinese" ~ "Asian (Chinese)", race == "japanese" ~ "Asian (Japanese)", race == "other asian or pacific islander" ~ "Other Asian or Pacific Islander", race == "other race, nec" | race =="two major races" | race =="three or more major races" ~ "Some other race"))
+
+
+reduced_data_p <- reduced_data_p %>%
+  mutate(Education = case_when(educ == "n/a or no schooling" | educ =="nursery school to grade 4" | educ =="grade 5, 6, 7, or 8" ~ "Middle School or less", educ == "grade 9" | educ == "grade 10" | educ == "grade 11" ~ "Completed some high school", educ == "grade 12" ~ "High school graduate", educ == "1 year of college" | educ == "2 years of college" | educ == "3 years of college" ~ "Some College", educ == "4 years of college" ~ "College Degree (such as B.A., B.S.)", educ == "5+ years of college" ~ "Beyond College"))
+
+
+reduced_data_p <- reduced_data_p %>%
+   rename(Hispanic = hispan,
+          Employment = empstat)
+
+
+reduced_data_p <- 
+  reduced_data_p %>%
+  count(age_group,census_region,Race,Education,sex,Hispanic, Employment) %>%
+  group_by(age_group,census_region,Race,Education,sex,Hispanic, Employment) 
+# Saving the census data as a csv file in my
+# working directory
+write_csv(reduced_data_p, "census_data.csv")
+
+
+```
+
+```{r setup, include=FALSE}
+
+# Loading in the cleaned survey Data
+survey_data <- read_csv("survey_data.csv")
+
+# Loading in the cleaned census Data
+census_data <- read_csv("census_data.csv")
+
+```
+
+# Model
+
+```{r}
+library(lme4)
+#Build the full logistic model for variable selection
+fullmodel <- glm(vote_trump ~ language + Employment + sex + Hispanic + Race + household_income + Education + age_group + state + census_region, data = survey_data, family = binomial)
+
+summary(fullmodel)
+
+```
+
+```{r}
+#Using backward selection
+b_step.model <- fullmodel %>% MASS::stepAIC(trace = FALSE, direction = "backward")
+coef(b_step.model)
+
+```
+
+### Backward selection selects employment, hispanic, sex, race, household income, education, age_group, census_region
+
+```{r}
+#Using forward selection
+f_step.model <- fullmodel %>% MASS::stepAIC(trace = FALSE, direction = "forward")
+coef(f_step.model)
+```
+
+### Forward selection selects the full model
+
+```{r}
+c(AIC(b_step.model),BIC(b_step.model))
+
+c(AIC(fullmodel),BIC(fullmodel))
+```
+
+### Select the model chosen by backward selection because it has the lowerst AIC and BIC.
+### Build the selected model
+
+```{r}
+
+b_model <- glm(vote_trump ~ Employment + sex + Hispanic + Race + household_income + Education + age_group + census_region, data = survey_data, family = binomial)
+
+summary(b_model)
+```
+
+
+### Check for multicollinearity
+```{r}
+
+car::vif(b_model)
+```
+
+
+### Drop the variable household income because it does not has a match with the census data
+### Build the final model
+
+```{r}
+
+F_model_T <- glm(vote_trump ~ Employment + sex + Hispanic + Race + Education + age_group + census_region, data = survey_data, family = binomial)
+
+summary(F_model_T)
+```
+```{r}
+F_model_B <- glm(vote_biden ~ Employment + sex + Hispanic + Race + Education + age_group + census_region, data = survey_data, family = binomial)
+
+summary(F_model_B)
+```
+
+### Implement post-stratification
+
+```{r}
+
+
+
+census_data$logodds_estimate_t <-
+  F_model_T %>%
+  predict(newdata = census_data)
+
+census_data$estimate_t <-
+  exp(census_data$logodds_estimate_t)/(1+exp(census_data$logodds_estimate_t))
+
+census_data %>%
+  mutate(alp_predict_prop_t = estimate_t*n) %>%
+  summarise(alp_predict_t = sum(alp_predict_prop_t)/sum(n))
+
+census_data$logodds_estimate_b <-
+  F_model_B %>%
+  predict(newdata = census_data)
+
+census_data$estimate_b <-
+  exp(census_data$logodds_estimate_b)/(1+exp(census_data$logodds_estimate_b))
+
+census_data %>%
+  mutate(alp_predict_prop_b = estimate_b*n) %>%
+  summarise(alp_predict_b = sum(alp_predict_prop_b)/sum(n))
+```
+
+Here we are interested in predicting the popular vote outcome of the 2020 American federal election (include citation). To do this we are employing a post-stratification technique. In the following sub-sections we will describe the model specifics and the post-stratification calculation. 
+
+## Model Specifics
+
+We decided to use a logistic regression model (Frequentist approach) in this research. A logistic regression model is used here rather than a linear regression model because the dependent variable is binary and categorical. And we did not choose a Bayesian approach because we do not know any prior information to do that. So a logistic regression model that models the proportion of voters who will vote for Trump and Biden is shown below (created using R):   
+```{r, include=FALSE}
+
+# Creating the Model
+F_model <- glm(vote_trump ~ Employment + sex + Hispanic + Race + Education + age_group + census_region, data = survey_data, family = binomial)
+
+
+```
+
+$$ log(p/(1-p)) = \beta_0+\beta_1  x_{1} + \beta_2  x_{2} + \beta_3  x_{3} + \beta_4  x_{4} + \beta_5  x_{5} + \beta_6  x_{6} + \beta_7  x_{7} + \beta_8  x_{8} + \beta_9  x_{9} + \beta_{10}  x_{10} + \beta_{11}  x_{11} + \beta_{12}  x_{12} + \beta_{13}  x_{13} + \beta_{14}  x_{14} + \beta_{15}  x_{15} + \beta_{16}  x_{16} + \beta_{17}  x_{17} + \beta_{18}  x_{18} + \beta_{19}  x_{19} + \beta_{20}  x_{20} + \beta_{21}  x_{21} + \beta_{22}  x_{22} + \beta_{23}  x_{23} + \beta_{24}  x_{24} + \beta_{25}  x_{25} + \beta_{26}  x_{26} + \epsilon$$
+
+p represents the proportion of voters who will vote for Donald Trump in 2020. The intercept $\beta_0$ is not very interpretable, it is simply the proportion of voters who support Donald Trump when all the other explanatory variables are zero. 7 big categorical variables are used to build the model and they expand to 26 explanatory variables, from $x_1$ to $x_26$, they are respectively: Employment - not in labor force; Employment - unemployed; male; Hispanic - Mexican; Hispanic - not hispanic, Hispanic - other; Hispanic - Puerto Rican; Chinese; Japanese; Black, or African American; Other Asian or Pacific Islander;  Other race; White; Education - beyond college; Education - college Degree; Education - completed some high school; Education - high school graduate; Education - middle School or less; Education - some college; age 31 to 40; age 41 to 50; age 51 to 60; age 60 plus; census_region - Northeast; census_region - South; census_region - West. The name of each $x$ is very straightforward and the corresponding $\beta$ simply indicates the unit change in the proportion of voters who support trump when one unit of the $x$ changes while holding the other variables fixed. Since all the variables are dummy variables, all the $x$ will only take a value of 1 or 0. For example, $x_1$ is 1 only when a person is not in the labour force, then $\beta_1$ indicates that when two individuals are identical in all the characteristics of the model except that one of them is in the labour force and the other one is not, their mean probability difference of voting for Trump. Moreover, to avoid dummy variable traps, each big categorical variable has one of its categories omitted in the regression model. For example, the category "employed" of the categorical variable "Employment" is omitted in the model, as well as the category "age 18 to 30" of the age group variable. All the omitted variables are included in the error term $\epsilon$.  
+
+Furthermore, when choosing these categorical variables, we think the age variable has too many categories as a categorical variable. So I sort it into different age groups to simplify the model and also enhances the estimation. Then we used backward selection and forward selection to find the potential combinations of variables that make the model has the lowest AIC. And the backward selection gives me the "best" model to further analyze. After that, we checked the VIF of the "best" model and the variables all have a GVIF of less than 1.9, which means the multicollinearity assumption is met for the model. However, we had to drop the variable "household_income" in the "best" model because we found out that the census data does not have a similar match with this variable. Thus, the model presented above does not include "household_income". 
+ 
+
+## Post-Stratification 
+
+In order to estimate the proportion of voters who will vote for Donald Trump we need to perform a post-stratification analysis. The logic behind the technique is that we divided the sample into many different cells, and calculated a post-stratification weight w = rP /r for each sample case in each cell. In the equation, where r is seen as the number of respondents in the specific cell, P is the population proportion from the census data, and r is the respondent sample size. Here we created cells based off different ages. Using the model described in the previous sub-section we will estimate the proportion of voters in each age bin, we then weighted each proportion estimate (within each bin) by the respective population size of that bin and sum those values and divide that by the entire population size. Before constructing and applying the logistic regression model to the statistics, we first performed some data cleaning processes. Firstly, we excluded all the underage voters(under 18) and all the voters who did not register before voting. We then decided to stratify the data based on regions because historically speaking, states in the same region share the same political standings and beliefs, it also makes the process cleaner and more convenient because if we decided to divide the sample sizes based states, there would be too many post-stratum. We also decided to include other factors including race, educational level, sex, whether or not the voter is Hispanic and employment status into the cell splitting process. Race often impacts one's political view because of historical racial discrimination among the American government actions, educational level is also a dominant factor because knowledge heavily affects one's perception. Sex should also be included because Donald Trump has made some comments that have raised offense against women in the past. Lastly, employment status should as well be included because each party's different policies on taxing and benefits for unemployed workers. As mentioned in the previous paragraph, household income was excluded in the post-stratification process because census data does not have a similar match with this variable, in addition, because of the COVID-19 pandemic, almost all household's income level are affected to some degree, so this may cause some unwanted fluctuations in evaluating the data. In the process, we decided to look at both the proportion of people voting for Trump and Biden. 
+
+```{r, include=TRUE, echo = FALSE}
+
+census_data$logodds_estimate <-
+  F_model %>%
+  predict(newdata = census_data)
+
+census_data$estimate <-
+  exp(census_data$logodds_estimate)/(1+exp(census_data$logodds_estimate))
+
+census_data %>%
+  mutate(alp_predict_prop = estimate*n) %>%
+  summarise(alp_predict = sum(alp_predict_prop)/sum(n))
+
+
+```
+
+
+# Results
+```{r, echo = FALSE}
+census_data %>%
+  mutate(alp_predict_prop_t = estimate_t*n) %>%
+  summarise(alp_predict_t = sum(alp_predict_prop_t)/sum(n))
+
+census_data %>%
+  mutate(alp_predict_prop_b = estimate_b*n) %>%
+  summarise(alp_predict_b = sum(alp_predict_prop_b)/sum(n))
+
+```
+We estimate that the proportion of voters in favor of voting for Donald Trump to be about 0.439. This is based off our post-stratification analysis of the proportion of voters in favor of Donald Trump modeled by a logistic regression model, which accounted for 6 categorical variables: Employment, Hispanic, sex, Race, Education, age_group, census_region.
+
+We estimate that the proportion of voters in favor of voting for Joe Biden to be about 0.43. This is based off our post-stratification analysis of the proportion of voters in favor of Joe Biden modeled by a logistic regression model, which accounted for 6 categorical variables: Employment, Hispanic, sex, Race, Education, age_group, census_region.
+
+
+### Additional information
+
+```{r, echo = FALSE}
+summary(F_model)
+```
+The table above will be called table 1. At the top, it provides a brief five-number summary of the residuals of the model. At the coefficient section, it provides the estimated coefficient of each explanatory variable with its standard error and the significance test. The null hypothesis of the significance test for $\beta$ is $\beta$ = 0, the alternative hypothesis is $\beta$ ≠ 0. For example, the significance test of $\beta_3$ has $H_0$: $\beta_3$ = 0 and $H_1$: $\beta_3$ ≠ 0. 
+
+
+# Discussion
+
+The report predicts the outcome of the 2020 American federal election. We used a logistic regression model to analyze the Nationscape data set. The model includes 7 big categorical variables. Additionally, we use backward and forward selection to find the potential combinations of variables that make the model has the lowest AIC. We also create a post- stratification data set with 6 variables selected from American Community Survey data. We create cells based on different ages. Furthermore, the report includes tables of summary of our model and results.
+The report provides an analysis of the regression model with post-stratification to predict the election outcome. From a detailed examination, the estimated proportion of voters in favor of voting for Donald Trump is 0.439, while the estimated proportion of voters in favor of voting for Joe Biden is about 0.43. 
+
+## Weaknesses
+
+There are a few important weaknesses in our report which we need to point out. For example, although we are using phase 2 of the Nationscape data set, it only includes data up to July 2020. This means there are potential changes in the participants’ responses over the past few months. The data may be not up to date especially in this time period during the COVID-19 pandemic and with the ending of the presidential debates. Individual survey data has limitations on the following trends in real-time. Further, there are also concerns about the validity when using existing data as it restricts what and how questions are being asked. Looking at the post- stratification data, since we make our own decision on the variables that we select from the ACS data, there may be other variables that affect vote intention but are not included in the data we selected. There is definitely a trade-off between simplicity and a fully-covered sample. Additionally, nonresponse and incomplete information are major drawbacks of the post- stratification dataset. It may not be a perfect representation of the number of people in the sample unit.
+
+## Next Steps
+
+From the report, we came to a conclusion on the estimation of the election outcome. For further steps, it is important to investigate the accuracy of the estimation by comparing it with
+the actual outcome of the election. In particular, we can select more variables from ACS data and see whether we could get a more accurate result. Further, we can also post the report online and create a survey for the viewers to give feedback or comments on the method used or data generated in the report. It is essential to find the factors that will help to improve estimation in future elections. 
+
+
+# References
+
+
+
